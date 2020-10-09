@@ -37,7 +37,7 @@ def get_parent_process(ps: Ps, browser: str)-> Ps:
 
 def get_database_path(ps: Ps, browser: str)-> Path:
     regex = None
-    if browser.lower() in ("chrome",):
+    if browser.lower() in ("chrome","opera","brave"):
         regex = r'^\S+History$'
     elif browser.lower() in ("firefox",):
         regex = r'^\S+places.sqlite$'
@@ -45,12 +45,19 @@ def get_database_path(ps: Ps, browser: str)-> Path:
     for file_loc in open_files:
         if re.match(regex, file_loc):
             return Path(file_loc)
+    # search in child processes of parent process
+    children = ps.children()
+    for c in children:
+        if browser.lower() in c.name().lower():
+            for file_loc in map(lambda x:x.path, c.open_files()):
+                if re.match(regex, file_loc):
+                    return Path(file_loc)
     raise CannotFindDatabase
 
 def duplicate_file(file_loc: Path, browser: str, dont_cp: bool=False)-> Path:
     if not os.path.isdir('database'):
         os.mkdir('database')
-    dest_loc = Path('./database/firefox.sqlite') if browser.lower() in ('firefox') else Path('./database/chrome.sqlite')
+    dest_loc = Path(f'./database/{browser}.sqlite')
     if dont_cp:
         return dest_loc
     shutil.copy(file_loc, dest_loc)
@@ -106,7 +113,7 @@ def show_data(data: List[RowProxy], column_limit: int=25)-> None:
 
 if __name__=="__main__":
     parser = argparse.ArgumentParser(description="Get running browser history from sqlite database")
-    parser.add_argument('-b', '--browser', type=str, choices=['firefox','chrome'], required=True)
+    parser.add_argument('-b', '--browser', type=str, choices=['firefox','chrome','opera','brave'], required=True)
     parser.add_argument('-c', '--count', type=int, default=5)
     parser.add_argument('-d', '--dont-copy', action="store_true")
     parser.add_argument('-l', '--rowlength', type=int, default=25)
@@ -123,9 +130,9 @@ if __name__=="__main__":
         db_path = get_database_path(parent_ps, browser)
     dup_path = duplicate_file(db_path, browser, bool(args.dont_copy))
     urls = None
-    if browser == "firefox":
+    if browser in ("firefox",):
         urls = read_urls_firefox(dup_path, args.count)
-    elif browser == "chrome":
+    elif browser in ("chrome", "opera", "brave"):
         urls = read_urls_chrome(dup_path, args.count)
     show_data(urls, column_limit=args.rowlength)
 

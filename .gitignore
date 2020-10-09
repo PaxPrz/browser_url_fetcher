@@ -3,3 +3,4 @@ database/*
 bin/
 lib/
 env/
+__pycache__/*

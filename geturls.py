@@ -75,7 +75,7 @@ def read_urls_firefox(file_loc: Path, result_limit: int=5)-> List[RowProxy]: # L
     return query.execute().fetchall()
 
 def read_urls_chrome(file_loc: Path, result_limit: int=5)-> List[RowProxy]:
-    engine = create_engine('sqlite:///'+file_loc.as_posix())
+    engine = create_engine('sqlite:///'+os.path.join(file_loc))
     metadata = MetaData(bind=engine)
     url_table = Table('urls', metadata,
         Column('id', Integer, primary_key=True),
@@ -106,7 +106,7 @@ def show_data(data: List[RowProxy], column_limit: int=25)-> None:
 
 if __name__=="__main__":
     parser = argparse.ArgumentParser(description="Get running browser history from sqlite database")
-    parser.add_argument('-b', '--browser', type=str, choices=['firefox','chrome'])
+    parser.add_argument('-b', '--browser', type=str, choices=['firefox','chrome'], required=True)
     parser.add_argument('-c', '--count', type=int, default=5)
     parser.add_argument('-d', '--dont-copy', action="store_true")
     parser.add_argument('-l', '--rowlength', type=int, default=25)

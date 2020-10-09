@@ -1,2 +1,5 @@
 database/*
 *.sqlite
+bin/
+lib/
+env/

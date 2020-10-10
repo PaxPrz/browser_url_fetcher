@@ -37,10 +37,10 @@ def get_parent_process(ps: Ps, browser: str)-> Ps:
 
 def get_database_path(ps: Ps, browser: str)-> Path:
     regex = None
-    if browser.lower() in ("chrome","opera","brave"):
-        regex = r'^\S+History$'
+    if browser.lower() in ("chrome","opera","brave","edge"):
+        regex = r'^.+(\\|\/)History$'
     elif browser.lower() in ("firefox",):
-        regex = r'^\S+places.sqlite$'
+        regex = r'^.+(\\|\/)places.sqlite$'
     open_files = map(lambda x:x.path, ps.open_files())
     for file_loc in open_files:
         if re.match(regex, file_loc):
@@ -113,7 +113,7 @@ def show_data(data: List[RowProxy], column_limit: int=25)-> None:
 
 if __name__=="__main__":
     parser = argparse.ArgumentParser(description="Get running browser history from sqlite database")
-    parser.add_argument('-b', '--browser', type=str, choices=['firefox','chrome','opera','brave'], required=True)
+    parser.add_argument('-b', '--browser', type=str, choices=['firefox','chrome','opera','brave','edge'], required=True)
     parser.add_argument('-c', '--count', type=int, default=5)
     parser.add_argument('-d', '--dont-copy', action="store_true")
     parser.add_argument('-l', '--rowlength', type=int, default=25)

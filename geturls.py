@@ -64,7 +64,7 @@ def duplicate_file(file_loc: Path, browser: str, dont_cp: bool=False)-> Path:
     return dest_loc
 
 def read_urls_firefox(file_loc: Path, result_limit: int=5)-> List[RowProxy]: # List[Dict[str, Union[str, int, datetime]]]:
-    engine = create_engine('sqlite:///'+file_loc.as_posix())
+    engine = create_engine('sqlite:///'+os.path.join(file_loc))
     metadata = MetaData(bind=engine)
     url_table = Table('moz_places', metadata,
         Column('id', Integer, primary_key=True),

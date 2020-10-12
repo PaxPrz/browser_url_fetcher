@@ -91,7 +91,7 @@ def read_urls_chrome(file_loc: Path, result_limit: int=5)-> List[RowProxy]:
         Column('last_visit_time', Integer)
     )
     query = sa.select(
-            [*url_table.c, label('timestamp', url_table.c.last_visit_time - 11644473600)]
+            [*url_table.c, label('timestamp', url_table.c.last_visit_time - 11_644_473_600_000_000)]
         ).order_by(
             url_table.c.last_visit_time.desc()
         ).limit(
@@ -107,7 +107,7 @@ def show_data(data: List[RowProxy], column_limit: int=25)-> None:
                 row.id,
                 '' if not row.title else row.title[:column_limit],
                 '' if not row.url else row.url[:column_limit],
-                'NA' if (time := int(((row.timestamp or 0)-116_444_736_00)/1_000_000)) < 0 else datetime.fromtimestamp(time).strftime('%m/%d %H:%M %p')
+                'NA' if (time := int(((row.timestamp or 0))/1_000_000)) < 0 else datetime.fromtimestamp(time).strftime('%m/%d %H:%M %p')
             ])
     print(table)
 

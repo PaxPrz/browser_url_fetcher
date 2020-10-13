@@ -10,8 +10,6 @@ import os
 import re
 from datetime import datetime
 from contextlib import suppress
-import argparse
-import sys
 import time
 from dotenv import load_dotenv
 import logging
@@ -165,7 +163,7 @@ def show_data(data: List[RowProxy], column_limit: int=25)-> None:
 def fetch_urls(browser: str, count: int=5, from_time: datetime=None):
     '''
         Covers overall function. Fetches url and return dictionary with keys = profile_name.
-        Note: for converting timestamp to datetime object, use datetime.fromtimestamp(timestamp/1_000_000)
+        Note: Use timestamp key for converting to date: datetime.fromtimestamp(timestamp/1_000_000)
 
         Args:
             browser (str): The browser to fetch url (Use a piece from process name)
@@ -191,6 +189,8 @@ def fetch_urls(browser: str, count: int=5, from_time: datetime=None):
     return result_dict
 
 if __name__=="__main__":
+    import argparse
+    import sys
     parser = argparse.ArgumentParser(description="Get running browser history from sqlite database")
     parser.add_argument('-b', '--browser', type=str, choices=['firefox','chrome','opera','brave','edge'], required=True)
     parser.add_argument('-c', '--count', type=int, default=5, help="Doesn't work with --fromtime")

@@ -14,6 +14,7 @@ import argparse
 import sys
 import time
 from dotenv import load_dotenv
+import logging
 
 load_dotenv(dotenv_path="geturls.env")
 
@@ -22,18 +23,23 @@ Ps = TypeVar('Process', bound=psutil.Process)
 FIREFOX = ("firefox",)
 CHROMIUM = ("chrome", "opera", "brave", "edge")
 
+log = logging.getLogger('__name__')
+
 class CannotFindDatabase(Exception):
     def __str__(self):
-        print("Database file cannot be found!!")
+        return "Database file cannot be found!!"
 
 class CannotFindProcess(Exception):
     def __init__(self, browser):
         self.browser = browser
 
     def __str__(self):
-        print(f"Cannot find the {self.browser} process!!")
+        return f"Cannot find the {self.browser} process!!"
 
 def get_process(browser: str)-> List[Ps]:
+    '''
+        Returns browser processes
+    '''
     ps_list = []
     for p in psutil.process_iter():
         if browser.lower() in p.name().lower():
@@ -41,6 +47,9 @@ def get_process(browser: str)-> List[Ps]:
     return ps_list
 
 def get_parent_process(ps_list: List[Ps], browser: str)-> Set[Ps]:
+    '''
+        Returns only parent processes of all active browser processses
+    '''
     parent_set = set()
     for ps in ps_list:
         backup = ps
@@ -53,27 +62,41 @@ def get_parent_process(ps_list: List[Ps], browser: str)-> Set[Ps]:
                 backup = ps
     return parent_set
 
-def get_database_path(ps_set: Set[Ps], browser: str)-> Path:
+def get_database_path(ps_set: Set[Ps], browser: str)-> Set[Path]:
+    '''
+        Returns set of sqlite database paths
+    '''
     regex = None
+    db_paths = set()
     if browser.lower() in CHROMIUM:
         regex = r'^.+(\\|\/)History$'
     elif browser.lower() in FIREFOX:
         regex = r'^.+(\\|\/)places.sqlite$'
     for ps in ps_set:
-        open_files = map(lambda x:x.path, ps.open_files())
-        for file_loc in open_files:
-            if re.match(regex, file_loc):
-                return Path(file_loc)
-        # search in child processes of parent process
-        children = ps.children()
-        for c in children:
-            if browser.lower() in c.name().lower():
-                for file_loc in map(lambda x:x.path, c.open_files()):
-                    if re.match(regex, file_loc):
-                        return Path(file_loc)
-    raise CannotFindDatabase
+        search_children = True
+        try:
+            open_files = map(lambda x:x.path, ps.open_files())
+            for file_loc in open_files:
+                if re.match(regex, file_loc):
+                    db_paths.add(Path(file_loc))
+                    search_children = False
+            # search in child processes of parent process
+            if search_children:
+                children = ps.children()
+                for c in children:
+                    if browser.lower() in c.name().lower():
+                        for file_loc in map(lambda x:x.path, c.open_files()):
+                            if re.match(regex, file_loc):
+                                db_paths.add(Path(file_loc))
+        except psutil.AccessDenied:
+            log.error(f"User don't have permission for {browser} browser")
+            continue
+    return db_paths
 
 def duplicate_file(file_loc: Path, browser: str, dont_cp: bool=False)-> Path:
+    '''
+        Copies the sqlite database and returns the copied folder
+    '''
     database_dir = os.getenv("DATABASE_COPY_DIR", default="database")
     if not os.path.isdir(database_dir):
         os.mkdir(database_dir)
@@ -84,6 +107,9 @@ def duplicate_file(file_loc: Path, browser: str, dont_cp: bool=False)-> Path:
     return dest_loc
 
 def read_urls(browser: str, file_loc: Path, result_limit: int=5, fetch_time: datetime=None)-> List[RowProxy]:
+    '''
+        Reads the urls from sqlite db and formats timestamp for both firefox and chromium
+    '''
     CHROMIUM_OFFSET = 11_644_473_600_000_000
     browser = browser.lower()
     engine = create_engine('sqlite:///'+os.path.join(file_loc))
@@ -121,6 +147,9 @@ def read_urls(browser: str, file_loc: Path, result_limit: int=5, fetch_time: dat
     return query.execute().fetchall()
 
 def show_data(data: List[RowProxy], column_limit: int=25)-> None:
+    '''
+        Uses PrettyTable to print the title, urls and timestamp in format
+    '''
     from prettytable import PrettyTable
     table = PrettyTable(['ID', 'Title', 'URL', 'Last Visited'])
     for row in data:
@@ -134,14 +163,32 @@ def show_data(data: List[RowProxy], column_limit: int=25)-> None:
     print(table)
 
 def fetch_urls(browser: str, count: int=5, from_time: datetime=None):
+    '''
+        Covers overall function. Fetches url and return dictionary with keys = profile_name.
+        Note: for converting timestamp to datetime object, use datetime.fromtimestamp(timestamp/1_000_000)
+
+        Args:
+            browser (str): The browser to fetch url (Use a piece from process name)
+            count (int): Returns last n history. Disabled when from_time is defined
+            from_time (datetime): Return history from defined timestamp
+
+        Returns:
+            Dict[str, List[RowProxy]]: maps profile_name with corresponding urls; incase of multiple profile browser like chrome
+
+    '''
     ps_list = get_process(browser)
     if len(ps_list) == 0:
         raise CannotFindProcess(browser)
     parent_ps_set = get_parent_process(ps_list, browser)
-    db_path = get_database_path(parent_ps_set, browser)
-    dup_path = duplicate_file(db_path, browser, dont_cp=False)
-    urls = read_urls(browser, dup_path, args.count, from_time)
-    return urls
+    db_paths = get_database_path(parent_ps_set, browser)
+    if len(db_paths) == 0:
+        raise CannotFindDatabase
+    result_dict = {}
+    for db_path in db_paths:
+        dup_path = duplicate_file(db_path, browser, dont_cp=False)
+        urls = read_urls(browser, dup_path, count, from_time)
+        result_dict.update({db_path.parent.name: urls})
+    return result_dict
 
 if __name__=="__main__":
     parser = argparse.ArgumentParser(description="Get running browser history from sqlite database")
@@ -152,16 +199,27 @@ if __name__=="__main__":
     parser.add_argument('-t', '--fromtime', type=str, default=None, help="YYYY-MM-DDTHH:MM:SS")
     args = parser.parse_args()
 
+    def just_print(db_path, browser):
+        dup_path = duplicate_file(db_path, browser, bool(args.dont_copy))
+        urls = read_urls(browser, dup_path, args.count, datetime.fromisoformat(args.fromtime) if args.fromtime else None)
+        if db_path:
+            print(f"Profile: {db_path.parent.name}")
+        show_data(urls, column_limit=args.rowlength)
+
     browser = args.browser
     db_path = None
     if not args.dont_copy:
         ps_list = get_process(browser)
         if len(ps_list) == 0:
-            print(f"Cannot get {browser} Process! The browser must be active.")
+            log.warn(f"Cannot get {browser} Process! The browser must be active.")
             sys.exit(404)
         parent_ps_set = get_parent_process(ps_list, browser)
-        db_path = get_database_path(parent_ps_set, browser)
-    dup_path = duplicate_file(db_path, browser, bool(args.dont_copy))
-    urls = read_urls(browser, dup_path, args.count, datetime.fromisoformat(args.fromtime) if args.fromtime else None)
-    show_data(urls, column_limit=args.rowlength)
+        db_paths = get_database_path(parent_ps_set, browser)
+        if len(db_paths) == 0:
+            log.warn(f"Cannot find database file")
+            sys.exit(500)
+        for db_path in db_paths:
+            just_print(db_path, browser)
+    else:
+        just_print(db_path, browser)
 

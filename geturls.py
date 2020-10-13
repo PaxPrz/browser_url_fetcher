@@ -140,7 +140,7 @@ def fetch_urls(browser: str, count: int=5, from_time: datetime=None):
     parent_ps_set = get_parent_process(ps_list, browser)
     db_path = get_database_path(parent_ps_set, browser)
     dup_path = duplicate_file(db_path, browser, dont_cp=False)
-    urls = read_urls(browser, dup_path, args.count, datetime.fromisoformat(args.fromtime) if args.fromtime else None)
+    urls = read_urls(browser, dup_path, args.count, from_time)
     return urls
 
 if __name__=="__main__":

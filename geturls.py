@@ -13,12 +13,25 @@ from contextlib import suppress
 import argparse
 import sys
 import time
+from dotenv import load_dotenv
+
+load_dotenv(dotenv_path="geturls.env")
 
 Ps = TypeVar('Process', bound=psutil.Process)
+
+FIREFOX = ("firefox",)
+CHROMIUM = ("chrome", "opera", "brave", "edge")
 
 class CannotFindDatabase(Exception):
     def __str__(self):
         print("Database file cannot be found!!")
+
+class CannotFindProcess(Exception):
+    def __init__(self, browser):
+        self.browser = browser
+
+    def __str__(self):
+        print(f"Cannot find the {self.browser} process!!")
 
 def get_process(browser: str)-> List[Ps]:
     ps_list = []
@@ -27,7 +40,7 @@ def get_process(browser: str)-> List[Ps]:
             ps_list.append(p)
     return ps_list
 
-def get_parent_process(ps_list: List[Ps], browser: str)-> Ps:
+def get_parent_process(ps_list: List[Ps], browser: str)-> Set[Ps]:
     parent_set = set()
     for ps in ps_list:
         backup = ps
@@ -42,9 +55,9 @@ def get_parent_process(ps_list: List[Ps], browser: str)-> Ps:
 
 def get_database_path(ps_set: Set[Ps], browser: str)-> Path:
     regex = None
-    if browser.lower() in ("chrome","opera","brave","edge"):
+    if browser.lower() in CHROMIUM:
         regex = r'^.+(\\|\/)History$'
-    elif browser.lower() in ("firefox",):
+    elif browser.lower() in FIREFOX:
         regex = r'^.+(\\|\/)places.sqlite$'
     for ps in ps_set:
         open_files = map(lambda x:x.path, ps.open_files())
@@ -61,9 +74,10 @@ def get_database_path(ps_set: Set[Ps], browser: str)-> Path:
     raise CannotFindDatabase
 
 def duplicate_file(file_loc: Path, browser: str, dont_cp: bool=False)-> Path:
-    if not os.path.isdir('database'):
-        os.mkdir('database')
-    dest_loc = Path(f'./database/{browser}.sqlite')
+    database_dir = os.getenv("DATABASE_COPY_DIR", default="database")
+    if not os.path.isdir(database_dir):
+        os.mkdir(database_dir)
+    dest_loc = Path(os.path.join(database_dir, f'{browser}.sqlite'))
     if dont_cp:
         return dest_loc
     shutil.copy(file_loc, dest_loc)
@@ -71,8 +85,6 @@ def duplicate_file(file_loc: Path, browser: str, dont_cp: bool=False)-> Path:
 
 def read_urls(browser: str, file_loc: Path, result_limit: int=5, fetch_time: datetime=None)-> List[RowProxy]:
     CHROMIUM_OFFSET = 11_644_473_600_000_000
-    FIREFOX = ("firefox",)
-    CHROMIUM = ("chrome", "opera", "brave")
     browser = browser.lower()
     engine = create_engine('sqlite:///'+os.path.join(file_loc))
     metadata = MetaData(bind=engine)
@@ -121,6 +133,16 @@ def show_data(data: List[RowProxy], column_limit: int=25)-> None:
                 'NA' if (time := int(((row.timestamp or 0))/1_000_000)) < 0 else datetime.fromtimestamp(time).strftime('%m/%d %H:%M %p')
             ])
     print(table)
+
+def fetch_urls(browser: str, count: int=5, from_time: datetime=None):
+    ps_list = get_process(browser)
+    if len(ps_list) == 0:
+        raise CannotFindProcess(browser)
+    parent_ps_set = get_parent_process(ps_list, browser)
+    db_path = get_database_path(parent_ps_set, browser)
+    dup_path = duplicate_file(db_path, browser, dont_cp=False)
+    urls = read_urls(browser, dup_path, args.count, datetime.fromisoformat(args.fromtime) if args.fromtime else None)
+    return urls
 
 if __name__=="__main__":
     parser = argparse.ArgumentParser(description="Get running browser history from sqlite database")

@@ -1,8 +1,9 @@
 import unittest
 import psutil
-from geturls import (CannotFindDatabase, CannotFindProcess, get_process, get_parent_process, get_database_path, duplicate_file, read_urls, show_data, fetch_urls)
+from geturls import (CannotFindDatabase, CannotFindProcess, get_process, get_parent_process, get_database_path, duplicate_file, read_urls, show_data, fetch_urls, CHROMIUM, FIREFOX)
 from random import randint
 from datetime import datetime, timedelta
+import os
 
 BROWSER_LIST = (
     'firefox',
@@ -115,7 +116,7 @@ class GetUrlsTest(unittest.TestCase):
                 data = fetch_urls(browser, from_time=fetch_time)
                 for k, value in data.items():
                     if any(map(lambda x: datetime.fromtimestamp(x['timestamp']/1_000_000) < fetch_time, value)):
-                        self.assertTrue(1==2, "Fetched data before fetch_time")
+                        self.assertTrue(1==2, f"Fetched data before fetch_time for {browser} browser")
                     else:
                         self.assertTrue(1==1)
             except (CannotFindProcess, CannotFindDatabase):

@@ -109,16 +109,15 @@ def read_urls(browser: str, file_loc: Path, result_limit: int=5, fetch_time: dat
         query = sa.select(
             [*url_table.c, label('timestamp', url_table.c.last_visit_time - CHROMIUM_OFFSET)]
         )
-    query = query.order_by(
-            url_table.c[last_visit].desc()
-        )
     if fetch_time:
         timestamp = int(time.mktime(fetch_time.timetuple()) * 1_000_000)
         if browser in CHROMIUM:
             timestamp += CHROMIUM_OFFSET
         query = query.where(url_table.c[last_visit] > timestamp)
     else:
-        query = query.limit(result_limit)
+        query = query.order_by(
+            url_table.c[last_visit].desc()
+        ).limit(result_limit)
     return query.execute().fetchall()
 
 def show_data(data: List[RowProxy], column_limit: int=25)-> None:

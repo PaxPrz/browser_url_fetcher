@@ -13,6 +13,8 @@ from contextlib import suppress
 import time
 from dotenv import load_dotenv
 import logging
+import struct
+from collections import defaultdict
 
 load_dotenv(dotenv_path="geturls.env")
 
@@ -21,7 +23,7 @@ Ps = TypeVar('Process', bound=psutil.Process)
 FIREFOX = ("firefox",)
 CHROMIUM = ("chrome", "opera", "brave", "edge")
 
-log = logging.getLogger('__name__')
+log = logging.getLogger(__name__)
 
 class CannotFindDatabase(Exception):
     def __str__(self):
@@ -90,6 +92,18 @@ def get_database_path(ps_set: Set[Ps], browser: str)-> Set[Path]:
             log.error(f"User don't have permission for {browser} browser")
             continue
     return db_paths
+
+MODE_DICT=defaultdict(str, {
+    1: 'LEGACY',
+    2: 'WAL'
+})
+
+def read_journal_mode(file_loc: Path)-> str:
+    with open(file_loc, 'rb') as f:
+        f.seek(18, 0)
+        byte = f.read(1)
+    value = pack[0] if (pack:=struct.unpack('B', byte)) else None
+    return MODE_DICT[value]
 
 def duplicate_file(file_loc: Path, browser: str, dont_cp: bool=False)-> Path:
     '''
@@ -211,12 +225,12 @@ if __name__=="__main__":
     if not args.dont_copy:
         ps_list = get_process(browser)
         if len(ps_list) == 0:
-            log.warn(f"Cannot get {browser} Process! The browser must be active.")
+            log.warning(f"Cannot get {browser} Process! The browser must be active.")
             sys.exit(404)
         parent_ps_set = get_parent_process(ps_list, browser)
         db_paths = get_database_path(parent_ps_set, browser)
         if len(db_paths) == 0:
-            log.warn(f"Cannot find database file")
+            log.warning(f"Cannot find database file")
             sys.exit(500)
         for db_path in db_paths:
             just_print(db_path, browser)

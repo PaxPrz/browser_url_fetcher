@@ -4,3 +4,5 @@ bin/
 lib/
 env/
 __pycache__/*
+*.dat
+tables/

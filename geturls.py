@@ -54,7 +54,7 @@ def get_parent_process(ps_list: List[Ps], browser: str)-> Set[Ps]:
         with suppress(TypeError):
             while True:
                 ps = ps.parent()
-                if browser.lower() not in ps.name().lower():
+                if ps is None or browser.lower() not in ps.name().lower():
                     parent_set.add(backup)
                     break
                 backup = ps
